@@ -20,7 +20,8 @@ DATA_URL = (
 st.set_page_config(
     page_title="식품 영양 데이터 분석실",
     page_icon="🥗",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 
