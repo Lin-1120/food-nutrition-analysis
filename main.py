@@ -14,7 +14,7 @@ DATA_URL = (
     "%EC%A0%84%EA%B5%AD%ED%86%B5%ED%95%A9%EC%8B%9D%ED%92%88"
     "%EC%98%81%EC%96%91%EC%84%B1%EB%B6%84%EC%A0%95%EB%B3%B4_"
     "%EC%9D%8C%EC%8B%9D_%ED%91%9C%EC%A4%80%EB%8D%B0%EC%9D%B4"
-    "%ED%84%B0%281%29.csv"
+    "%ED%84%B0.csv"
 )
 
 st.set_page_config(
