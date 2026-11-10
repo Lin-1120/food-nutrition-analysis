@@ -1,25 +1,95 @@
-import re
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
-from sklearn.model_selection import train_test_split
 
 
-# --------------------------------------------------
-# 기본 설정
-# --------------------------------------------------
+# ==================================================
+# 1. 기본 설정
+# ==================================================
+
+# GitHub에 업로드한 CSV 파일의 공개 주소
+DATA_URL = (
+    "https://raw.githubusercontent.com/Lin-1120/"
+    "food-nutrition-analysis/main/"
+    "%EC%A0%84%EA%B5%AD%ED%86%B5%ED%95%A9%EC%8B%9D%ED%92%88"
+    "%EC%98%81%EC%96%91%EC%84%B1%EB%B6%84%EC%A0%95%EB%B3%B4_"
+    "%EC%9D%8C%EC%8B%9D_%ED%91%9C%EC%A4%80%EB%8D%B0%EC%9D%B4"
+    "%ED%84%B0%281%29.csv"
+)
+
 st.set_page_config(
     page_title="식품 영양 데이터 분석실",
     page_icon="🥗",
-    layout="wide",
+    layout="wide"
 )
 
-# GitHub에 CSV를 올린 뒤 Raw URL을 여기에 입력하세요.
-DATA_URL = "여기에_CSV_RAW_URL_입력"
 
-# 분석에 반드시 필요한 열 이름
-REQUIRED_COLUMNS = [
+# ==================================================
+# 2. 데이터 불러오기
+# ==================================================
+
+@st.cache_data
+def load_data():
+    data = pd.read_csv(
+        DATA_URL,
+        encoding="cp949",
+        low_memory=False
+    )
+
+    # 열 이름 앞뒤 공백 제거
+    data.columns = data.columns.astype(str).str.strip()
+
+    return data
+
+
+# ==================================================
+# 3. 앱 제목
+# ==================================================
+
+st.title("🥗 식품 영양 데이터 분석실")
+
+st.markdown(
+    """
+    ### 음식의 영양성분으로 나트륨 함량을 분석해 보자!
+
+    전국통합식품영양성분정보 음식 표준데이터를 활용하여
+    음식의 영양성분을 탐색하고 나트륨 함량이 높은 음식을
+    분류하는 프로젝트입니다.
+    """
+)
+
+st.divider()
+
+
+# ==================================================
+# 4. 데이터 불러오기 및 오류 처리
+# ==================================================
+
+try:
+    original_df = load_data()
+
+except Exception as e:
+    st.error("CSV 데이터를 불러오지 못했습니다.")
+
+    st.write("다음 사항을 확인해 주세요.")
+
+    st.write("1. GitHub 저장소에 CSV 파일이 업로드되어 있는지 확인해 주세요.")
+    st.write("2. CSV 파일이 저장소의 최상위 폴더에 있는지 확인해 주세요.")
+    st.write("3. 파일 이름이 코드에 입력된 이름과 같은지 확인해 주세요.")
+    st.write("4. GitHub 저장소가 Public 상태인지 확인해 주세요.")
+    st.write("5. CSV 파일의 인코딩이 CP949인지 확인해 주세요.")
+
+    with st.expander("오류 내용 자세히 보기"):
+        st.code(str(e))
+
+    st.stop()
+
+
+# ==================================================
+# 5. 필수 열 확인
+# ==================================================
+
+required_columns = [
     "식품명",
     "식품대분류명",
     "영양성분함량기준량",
@@ -27,117 +97,12 @@ REQUIRED_COLUMNS = [
     "단백질(g)",
     "당류(g)",
     "포화지방산(g)",
-    "나트륨(mg)",
+    "나트륨(mg)"
 ]
 
-
-# --------------------------------------------------
-# 데이터 불러오기
-# --------------------------------------------------
-@st.cache_data
-def load_data(url):
-    if not url or url == "여기에_CSV_RAW_URL_입력":
-        raise ValueError(
-            "CSV 공개 URL이 입력되지 않았습니다. "
-            "코드 맨 위의 DATA_URL에 GitHub Raw URL을 입력해 주세요."
-        )
-
-    data = pd.read_csv(url, encoding="cp949")
-
-    # 열 이름 앞뒤의 불필요한 공백 제거
-    data.columns = data.columns.astype(str).str.strip()
-
-    return data
-
-
-# --------------------------------------------------
-# 100g 기준 데이터만 선택
-# --------------------------------------------------
-def select_100g_data(data):
-    reference = data["영양성분함량기준량"].astype(str).str.strip()
-
-    # '100g', '100 g', '100g당' 등의 표현을 확인
-    mask = reference.str.contains(
-        r"100\s*g",
-        case=False,
-        regex=True,
-        na=False,
-    )
-
-    # 기준량이 숫자 100으로 저장된 경우도 처리
-    numeric_reference = pd.to_numeric(reference, errors="coerce")
-    mask = mask | (numeric_reference == 100)
-
-    return data.loc[mask].copy()
-
-
-# --------------------------------------------------
-# 숫자형 영양성분 변환
-# --------------------------------------------------
-def convert_numeric_columns(data):
-    data = data.copy()
-
-    numeric_columns = [
-        "에너지(kcal)",
-        "단백질(g)",
-        "당류(g)",
-        "포화지방산(g)",
-        "나트륨(mg)",
-    ]
-
-    for column in numeric_columns:
-        # 쉼표가 들어간 숫자도 처리
-        cleaned = (
-            data[column]
-            .astype(str)
-            .str.replace(",", "", regex=False)
-            .str.strip()
-        )
-
-        data[column] = pd.to_numeric(cleaned, errors="coerce")
-
-    return data
-
-
-# --------------------------------------------------
-# 앱 제목
-# --------------------------------------------------
-st.title("🥗 식품 영양 데이터 분석실")
-st.caption(
-    "음식의 영양성분 데이터를 살펴보고 "
-    "영양성분과 나트륨 함량의 관계를 알아보는 공간입니다."
-)
-
-st.divider()
-
-
-# --------------------------------------------------
-# 데이터 불러오기 및 오류 처리
-# --------------------------------------------------
-try:
-    original_df = load_data(DATA_URL)
-
-except Exception as error:
-    st.error("데이터를 불러오지 못했습니다.")
-
-    st.write(
-        "CSV 주소가 올바른지, GitHub 저장소에 파일이 올라가 있는지 "
-        "확인해 주세요. CSV 인코딩은 CP949로 설정되어 있어야 합니다."
-    )
-
-    with st.expander("오류 내용 자세히 보기"):
-        st.code(str(error))
-
-    st.stop()
-
-
-# --------------------------------------------------
-# 필수 열 확인
-# --------------------------------------------------
 missing_columns = [
-    column
-    for column in REQUIRED_COLUMNS
-    if column not in original_df.columns
+    col for col in required_columns
+    if col not in original_df.columns
 ]
 
 if missing_columns:
@@ -145,277 +110,309 @@ if missing_columns:
 
     st.write("다음 열이 파일에 없습니다.")
 
-    for column in missing_columns:
-        st.write(f"• {column}")
+    for col in missing_columns:
+        st.write(f"- {col}")
 
-    st.write("CSV 파일의 실제 열 이름과 코드에 적힌 열 이름을 확인해 주세요.")
-
-    with st.expander("CSV에 실제로 들어 있는 열 이름 확인하기"):
-        st.write(list(original_df.columns))
+    with st.expander("CSV 파일의 실제 열 이름 확인하기"):
+        st.write(original_df.columns.tolist())
 
     st.stop()
 
 
-# --------------------------------------------------
-# 100g 기준 데이터 선택
-# --------------------------------------------------
-df = select_100g_data(original_df)
+# ==================================================
+# 6. 100g 기준 데이터만 선택
+# ==================================================
+
+reference = (
+    original_df["영양성분함량기준량"]
+    .astype(str)
+    .str.strip()
+    .str.lower()
+)
+
+df = original_df[
+    reference == "100g"
+].copy()
 
 if df.empty:
     st.error("100g 기준에 해당하는 데이터를 찾지 못했습니다.")
 
-    st.write(
-        "영양성분함량기준량 열에 100g 또는 100 g과 같은 값이 "
-        "들어 있는지 확인해 주세요."
-    )
-
-    with st.expander("영양성분함량기준량의 실제 값 확인하기"):
+    with st.expander("기준량 열의 실제 값 확인하기"):
         st.write(
             original_df["영양성분함량기준량"]
-            .dropna()
-            .astype(str)
-            .unique()
-            .tolist()
+            .value_counts(dropna=False)
         )
 
     st.stop()
 
 
-# --------------------------------------------------
-# 영양성분 숫자형 변환
-# --------------------------------------------------
-df = convert_numeric_columns(df)
+# ==================================================
+# 7. 영양성분 숫자형 변환
+# ==================================================
 
-# 나트륨 함량이 없는 행은 고나트륨 기준 계산에서 제외
-valid_sodium = df["나트륨(mg)"].dropna()
+numeric_columns = [
+    "에너지(kcal)",
+    "단백질(g)",
+    "당류(g)",
+    "포화지방산(g)",
+    "나트륨(mg)"
+]
 
-if valid_sodium.empty:
+for col in numeric_columns:
+    df[col] = pd.to_numeric(
+        df[col].astype(str).str.replace(",", "", regex=False),
+        errors="coerce"
+    )
+
+
+# ==================================================
+# 8. 나트륨 데이터 확인
+# ==================================================
+
+sodium_data = df["나트륨(mg)"].dropna()
+
+if sodium_data.empty:
     st.error(
-        "100g 기준 데이터에서 나트륨 함량을 확인할 수 없습니다. "
-        "나트륨(mg) 열의 값을 확인해 주세요."
+        "100g 기준 데이터에서 나트륨 함량을 확인할 수 없습니다."
     )
     st.stop()
 
 
-# --------------------------------------------------
-# 고나트륨 기준 계산
-# --------------------------------------------------
-sodium_threshold = valid_sodium.quantile(0.75)
+# ==================================================
+# 9. 고나트륨 음식 분류
+# ==================================================
 
+# 나트륨 함량의 75백분위수 계산
+sodium_threshold = sodium_data.quantile(0.75)
+
+# 나트륨 값이 기준 이상이면 고나트륨 음식
 high_sodium_df = df[
     df["나트륨(mg)"] >= sodium_threshold
 ].copy()
 
-total_foods = len(df)
+total_food_count = len(df)
 column_count = len(df.columns)
 high_sodium_count = len(high_sodium_df)
+valid_sodium_count = len(sodium_data)
 
-# 나트륨 값이 있는 음식 중 고나트륨 음식의 비율
-valid_food_count = len(valid_sodium)
-
-high_sodium_ratio = (
-    high_sodium_count / valid_food_count * 100
-    if valid_food_count > 0
-    else 0
+high_sodium_rate = (
+    high_sodium_count / valid_sodium_count * 100
 )
 
 
-# --------------------------------------------------
-# 프로젝트 소개
-# --------------------------------------------------
-st.header("프로젝트 소개")
+# ==================================================
+# 10. 프로젝트 소개
+# ==================================================
+
+st.header("📌 프로젝트 소개")
 
 st.write(
     """
-    이 프로젝트는 전국통합식품영양성분정보 음식 표준데이터를 활용하여
-    음식에 포함된 영양성분과 나트륨 함량의 관계를 살펴보는 프로젝트입니다.
+    우리가 먹는 음식에는 에너지, 단백질, 당류, 지방,
+    나트륨 등 다양한 영양성분이 들어 있습니다.
 
-    모든 분석은 영양성분함량기준량이 100g인 음식만을 대상으로 합니다.
+    이 프로젝트에서는 전국통합식품영양성분정보 데이터를
+    활용하여 음식의 영양성분과 나트륨 함량 사이의 관계를
+    살펴보고자 합니다.
 
-    나트륨 함량의 상위 25%에 해당하는 음식을
-    '고나트륨 음식'으로 분류합니다.
+    특히 100g 기준 음식만을 분석 대상으로 선택하여
+    음식의 영양성분 조합에 따라 나트륨 함량이 높은 음식을
+    분류할 수 있는지 알아봅니다.
     """
 )
 
 st.info(
     f"현재 데이터의 고나트륨 분류 기준은 "
-    f"100g당 나트륨 {sodium_threshold:,.2f}mg 이상입니다. "
-    "이 기준은 현재 데이터의 75백분위수를 이용한 상대적 분류 기준입니다."
-)
-
-
-# --------------------------------------------------
-# 핵심 요약 카드
-# --------------------------------------------------
-st.header("데이터 한눈에 보기")
-
-card1, card2, card3, card4 = st.columns(4)
-
-card1.metric(
-    "전체 음식 데이터 수",
-    f"{total_foods:,}개",
-)
-
-card2.metric(
-    "열 개수",
-    f"{column_count:,}개",
-)
-
-card3.metric(
-    "고나트륨 음식 수",
-    f"{high_sodium_count:,}개",
-)
-
-card4.metric(
-    "고나트륨 음식 비율",
-    f"{high_sodium_ratio:.2f}%",
+    f"100g당 나트륨 {sodium_threshold:,.2f}mg 이상입니다."
 )
 
 st.caption(
-    "전체 음식 데이터 수는 100g 기준 음식 행의 수입니다. "
-    "고나트륨 음식 비율은 나트륨 값이 확인되는 음식만을 기준으로 계산합니다."
+    "※ 고나트륨 기준은 전체 나트륨 함량의 상위 25%를 이용한 "
+    "프로젝트 내부의 상대적 분류 기준입니다."
 )
 
 st.divider()
 
 
-# --------------------------------------------------
-# 열 이름과 데이터 정보
-# --------------------------------------------------
-st.header("열 이름과 데이터 살펴보기")
+# ==================================================
+# 11. 데이터 요약 카드
+# ==================================================
 
-st.write(
-    "각 열의 이름과 값의 종류, 빈 값 개수를 확인할 수 있습니다. "
-    "‘우리말 뜻’ 칸은 교재를 참고하여 직접 작성해 보세요."
+st.header("📊 데이터 한눈에 보기")
+
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric(
+    "전체 음식 데이터 수",
+    f"{total_food_count:,}개"
 )
 
-summary_rows = []
+col2.metric(
+    "열 개수",
+    f"{column_count:,}개"
+)
 
-for column in df.columns:
-    series = df[column]
+col3.metric(
+    "고나트륨 음식 수",
+    f"{high_sodium_count:,}개"
+)
 
-    if pd.api.types.is_numeric_dtype(series):
-        data_type = "숫자형"
+col4.metric(
+    "고나트륨 음식 비율",
+    f"{high_sodium_rate:.2f}%"
+)
+
+st.caption(
+    "전체 음식 데이터 수는 100g 기준 음식의 행 개수입니다. "
+    "고나트륨 음식 비율은 나트륨 값이 있는 음식만을 기준으로 계산합니다."
+)
+
+st.divider()
+
+
+# ==================================================
+# 12. 데이터 열 정보 표
+# ==================================================
+
+st.header("📋 데이터 열 정보")
+
+st.write(
+    """
+    아래 표에서 데이터의 열 이름, 값의 종류, 빈 값 개수를
+    확인할 수 있습니다.
+
+    '우리말 뜻' 칸은 교재를 참고하여 직접 채워 보세요.
+    """
+)
+
+column_info = []
+
+for col in df.columns:
+
+    if pd.api.types.is_numeric_dtype(df[col]):
+        value_type = "숫자형"
     else:
-        data_type = "문자형"
+        value_type = "문자형"
 
-    unique_count = series.nunique(dropna=True)
-    missing_count = int(series.isna().sum())
+    unique_count = df[col].nunique(dropna=True)
+    missing_count = int(df[col].isna().sum())
 
-    summary_rows.append(
-        {
-            "열 이름": column,
-            "우리말 뜻": "",
-            "값의 종류": f"{data_type} · 고유값 {unique_count:,}종",
-            "빈 값 개수": missing_count,
-        }
-    )
+    column_info.append({
+        "열 이름": col,
+        "우리말 뜻": "",
+        "값의 종류": f"{value_type} (고유값 {unique_count:,}개)",
+        "빈 값 개수": missing_count
+    })
 
-summary_df = pd.DataFrame(summary_rows)
+column_info_df = pd.DataFrame(column_info)
 
-edited_summary = st.data_editor(
-    summary_df,
+st.data_editor(
+    column_info_df,
     use_container_width=True,
     hide_index=True,
     disabled=[
         "열 이름",
         "값의 종류",
-        "빈 값 개수",
+        "빈 값 개수"
     ],
     column_config={
         "열 이름": st.column_config.TextColumn(
             "열 이름",
-            disabled=True,
+            disabled=True
         ),
         "우리말 뜻": st.column_config.TextColumn(
             "우리말 뜻",
-            help="교재를 참고하여 각 열의 의미를 직접 입력하세요.",
+            help="교재를 참고하여 직접 뜻을 입력해 보세요."
         ),
         "값의 종류": st.column_config.TextColumn(
             "값의 종류",
-            disabled=True,
+            disabled=True
         ),
         "빈 값 개수": st.column_config.NumberColumn(
             "빈 값 개수",
             disabled=True,
-            format="%d",
-        ),
+            format="%d"
+        )
     },
-    key="meaning_editor",
+    key="column_info_editor"
 )
 
 st.caption(
-    "값의 종류는 숫자형 또는 문자형 구분과 "
-    "결측치를 제외한 고유값 개수를 나타냅니다."
+    "※ 우리말 뜻 칸에 입력한 내용은 현재 화면에서 수정할 수 있지만 "
+    "별도로 저장되지는 않습니다."
 )
 
 st.divider()
 
 
-# --------------------------------------------------
-# 원본 데이터 미리보기
-# --------------------------------------------------
-st.header("데이터 처음 다섯 줄")
+# ==================================================
+# 13. 데이터 처음 다섯 줄
+# ==================================================
+
+st.header("🔎 원본 데이터 미리보기")
 
 st.write(
-    "아래 표는 100g 기준으로 선택한 데이터의 처음 다섯 행입니다. "
-    "열 순서는 CSV 원본 순서를 유지합니다."
+    "100g 기준으로 선택한 데이터의 처음 다섯 줄입니다."
 )
 
 st.dataframe(
     df.head(5),
     use_container_width=True,
-    hide_index=True,
+    hide_index=True
 )
 
 st.divider()
 
 
-# --------------------------------------------------
-# 데이터 출처
-# --------------------------------------------------
-st.header("데이터 출처")
+# ==================================================
+# 14. 데이터 출처
+# ==================================================
+
+st.header("📚 데이터 출처")
 
 st.write(
-    "사용한 데이터의 출처와 관련 정보를 기록하는 공간입니다."
+    """
+    **데이터 이름:** 전국통합식품영양성분정보 음식 표준데이터
+
+    **분석 대상:** 영양성분함량기준량이 100g인 음식
+
+    **데이터 인코딩:** CP949
+    """
 )
 
-source_text = st.text_area(
-    "데이터 출처 기록",
-    placeholder="데이터 출처와 제공 기관 등의 정보를 입력하세요.",
-    height=100,
+st.text_input(
+    "데이터 제공 기관 및 출처 주소",
+    placeholder="데이터 제공 기관과 원본 데이터 주소를 입력하세요."
 )
 
 st.caption(
-    "전국통합식품영양성분정보 음식 표준데이터를 사용합니다. "
-    "정확한 제공 기관 및 원본 데이터 주소를 확인하여 기록해 주세요."
+    "정확한 데이터 제공 기관과 원본 데이터 주소를 확인하여 기록해 주세요."
 )
 
 st.divider()
 
 
-# --------------------------------------------------
-# 분석 기준 안내
-# --------------------------------------------------
-with st.expander("데이터 분석 기준 확인하기"):
+# ==================================================
+# 15. 분석 기준 자세히 보기
+# ==================================================
+
+with st.expander("고나트륨 음식 분류 기준 자세히 보기"):
+
     st.write(
         f"""
-        **분석 대상:** 영양성분함량기준량이 100g인 음식
+        **분석 대상 음식 수:** {total_food_count:,}개
 
-        **고나트륨 분류 기준:** 나트륨 함량의 75백분위수 이상
+        **나트륨 값이 있는 음식 수:** {valid_sodium_count:,}개
 
-        **현재 계산된 기준:** 100g당 나트륨 {sodium_threshold:,.2f}mg
-
-        **나트륨 값이 있는 음식 수:** {valid_food_count:,}개
+        **고나트륨 분류 기준:** 100g당 나트륨 {sodium_threshold:,.2f}mg 이상
 
         **고나트륨 음식 수:** {high_sodium_count:,}개
 
-        **고나트륨 음식 비율:** {high_sodium_ratio:.2f}%
+        **고나트륨 음식 비율:** {high_sodium_rate:.2f}%
         """
     )
 
-    st.write(
-        "주의: 이 프로젝트에서 사용하는 고나트륨 분류는 "
-        "현재 데이터의 분포를 기준으로 만든 분석용 기준입니다. "
-        "공식적인 영양학적 판정 기준과는 다릅니다."
+    st.warning(
+        "이 기준은 데이터 분포의 상위 25%를 이용한 분석용 기준입니다. "
+        "공식적인 영양학적 고나트륨 판정 기준은 아닙니다."
     )
