@@ -1,7 +1,6 @@
 
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.express as px
 
 from sklearn.model_selection import train_test_split
@@ -38,7 +37,7 @@ st.divider()
 # 2. 데이터 불러오기
 # --------------------------------------------------
 
-DATA_URL = "https://raw.githubusercontent.com/Lin-1120/food-nutrition-analysis/main/%EC%A0%84%EA%B5%AD%ED%86%B5%ED%95%A9%EC%8B%9D%ED%92%88%EC%98%81%EC%96%91%EC%84%B1%EB%B6%84%EC%A0%95%EB%B3%B4_%EC%9D%8C%EC%8B%9D_%ED%91%9C%준데이터.csv"
+DATA_URL = "https://raw.githubusercontent.com/Lin-1120/food-nutrition-analysis/main/%EC%A0%84%EA%B5%AD%ED%86%B5%ED%95%A9%EC%8B%9D%ED%92%88%EC%98%81%EC%96%91%EC%84%B1%EB%B6%84%EC%A0%95%EB%B3%B4_%EC%9D%8C%EC%8B%9D_%ED%91%9C%EC%A4%80%EB%8D%B0%EC%9D%B4%ED%84%B0.csv"
 
 
 @st.cache_data
@@ -99,6 +98,11 @@ def load_data():
 
     # 나트륨 결측값 제거
     data = data.dropna(subset=["나트륨(mg)"]).copy()
+
+    if data.empty:
+        raise ValueError(
+            "100g 기준에 해당하는 음식 데이터가 없습니다."
+        )
 
     # 나트륨 상위 25% 기준
     sodium_threshold = data["나트륨(mg)"].quantile(0.75)
@@ -168,7 +172,7 @@ fig_distribution.update_layout(
 
 st.plotly_chart(
     fig_distribution,
-    use_container_width=True
+    width="stretch"
 )
 
 st.info(
@@ -250,7 +254,7 @@ try:
     )
 
 except ValueError as e:
-    st.error("데이터를 학습용과 테스트용으로 나누지 못했습니다.")
+    st.error("데이터를 학습용과 테스트 데이터로 나누지 못했습니다.")
     st.code(str(e))
     st.stop()
 
@@ -421,7 +425,7 @@ comparison_df = pd.DataFrame({
 
 st.dataframe(
     comparison_df.set_index("평가 지표").style.format("{:.3f}"),
-    use_container_width=True
+    width="stretch"
 )
 
 comparison_long = comparison_df.melt(
@@ -448,7 +452,7 @@ fig_comparison.update_layout(
 
 st.plotly_chart(
     fig_comparison,
-    use_container_width=True
+    width="stretch"
 )
 
 st.caption(
@@ -485,7 +489,7 @@ change_df["성능 변화"] = change_df["성능 변화"].apply(
 
 st.dataframe(
     change_df,
-    use_container_width=True,
+    width="stretch",
     hide_index=True
 )
 
@@ -550,7 +554,7 @@ fig_importance.update_layout(
 
 st.plotly_chart(
     fig_importance,
-    use_container_width=True
+    width="stretch"
 )
 
 most_important = importance_df.iloc[0]
